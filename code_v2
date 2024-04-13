@@ -1,0 +1,375 @@
+import matplotlib.pyplot as plt
+import networkx as nx
+import random
+from tabulate import tabulate
+
+def choisir_fichier_texte():
+    while True:
+        try:
+            numero = int(input("Veuillez saisir un nombre entre 0 et 44 : "))
+            if 0 <= numero <= 44:
+                filename = f"GRP1_automate_{numero}.txt"
+                return filename
+            else:
+                print("Le nombre saisi n'est pas valide. Veuillez saisir un nombre entre 0 et 44.")
+        except ValueError:
+            print("Veuillez saisir un nombre valide.")
+
+def lire_automate(filename):
+    automate = {}
+    with open(filename, 'r') as file:
+        automate['alphabet_size'] = int(file.readline().strip())
+        automate['num_states'] = int(file.readline().strip())
+        automate['init_states'] = list(map(int, file.readline().strip().split()))
+        automate['terminal_states'] = list(map(int, file.readline().strip().split()))
+        automate['num_transitions'] = int(file.readline().strip())
+        automate['transitions'] = [file.readline().strip() for _ in range(automate['num_transitions'])]
+    return automate
+
+
+def afficher_automate(automate):
+    alphabet_size = automate['alphabet_size']
+    num_states = automate['num_states']
+    init_states = automate['init_states']
+    terminal_states = automate['terminal_states']
+    transitions = automate['transitions']
+
+    # Initialisation du graphe dirigé
+    G = nx.DiGraph()
+
+    # Ajout des états
+    for state in range(num_states):
+        G.add_node(state)
+
+    # Ajout des transitions
+    transition_dict = {}
+    for transition in transitions:
+        start_state, symbol, end_state = int(transition[0]), transition[1], int(transition[2])
+        if (start_state, end_state) in transition_dict:
+            transition_dict[(start_state, end_state)].append(symbol)
+        else:
+            transition_dict[(start_state, end_state)] = [symbol]
+
+    for (start_state, end_state), symbols in transition_dict.items():
+        G.add_edge(start_state, end_state, label=symbols)
+
+    # Positionnement des états dans le graphe
+    pos = positionnement_noeuds(G)
+
+    # Création d'une liste pour stocker les couleurs des noeuds
+    node_colors = ['cyan'] * num_states
+
+    # Attribution des couleurs en fonction des états initiaux et terminaux
+    for state in init_states:
+        if isinstance(state, list):
+            for s in state:
+                node_colors[s] = 'green'
+        else:
+            node_colors[state] = 'green'
+
+    for state in terminal_states:
+        if isinstance(state, list):
+            for s in state:
+                if node_colors[s] == 'green':
+                    node_colors[s] = 'orange'
+                else:
+                    node_colors[s] = 'red'
+        else:
+            if node_colors[state] == 'green':
+                node_colors[state] = 'orange'
+            else:
+                node_colors[state] = 'red'
+
+    # Affichage des états avec les couleurs définies
+    nx.draw_networkx_nodes(G, pos, node_color=node_colors, node_size=700)
+    nx.draw_networkx_labels(G, pos)
+
+    # Dessin des flèches pour représenter les transitions
+    nx.draw_networkx_edges(G, pos, arrowsize=20, connectionstyle="arc3,rad=.1", width=1.5, edge_color='black')
+
+    # Ajout des étiquettes des transitions au-dessus de la flèche
+    for edge in G.edges(data=True):
+        start_state, end_state, label = edge
+        symbols = label['label']
+        symbols_text = ', '.join(symbols)
+        offset = 0.05 if pos[start_state][0] < pos[end_state][0] else +0.25
+        midpoint_x = (pos[start_state][0] + pos[end_state][0]) / 2
+        midpoint_y = (pos[start_state][1] + pos[end_state][1]) / 2
+        plt.text(midpoint_x, midpoint_y + offset, symbols_text, fontsize=10, ha='center')
+
+    # Légende pour les couleurs des états
+    legend_labels = {'green': 'Initial', 'orange': 'Initial & Terminal', 'red': 'Terminal'}
+    legend_handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color, markersize=10, label=label)
+                      for color, label in legend_labels.items()]
+    plt.legend(handles=legend_handles, loc='lower right', bbox_to_anchor=(1, 0))
+
+    # Affichage du graphe
+    plt.title('Automate Fini')
+    plt.axis('off')
+    plt.show()
+
+
+def positionnement_noeuds(graph):
+    num_nodes = len(graph.nodes)
+    if 1 <= num_nodes <= 10:
+        # Positionnement en cercle pour 1 à 8 nœuds
+        return nx.circular_layout(graph)
+    else:
+        # Positionnement aléatoire pour plus de 8 nœuds
+        return {node: (random.random(), random.random()) for node in graph.nodes()}
+
+
+from tabulate import tabulate
+
+
+def afficher_tableau_automate(automate):
+    # Récupération des informations de l'automate
+    num_states = automate['num_states']
+    init_states = automate['init_states']
+    terminal_states = automate['terminal_states']
+    transitions = automate['transitions']
+
+    # Création de la liste des symboles de transition
+    symbols = set()
+    for t in transitions:
+        symbols.add(t[1])
+    symbols = sorted(list(symbols))
+
+    # En-tête du tableau
+    headers = ["Entrée/Sortie", "État"] + symbols
+    data = []
+
+    # Boucle pour ajouter chaque état avec ses transitions dans les données du tableau
+    for state in range(num_states):
+        # Détermination de l'entrée et de la sortie de l'état
+        if state in init_states and state in terminal_states:
+            inout = "E/S"
+        elif state in init_states:
+            inout = "E"
+        elif state in terminal_states:
+            inout = "S"
+        else:
+            inout = "-"
+
+        # Récupération des transitions sortant de l'état
+        state_transitions = {s: [] for s in symbols}
+        for t in transitions:
+            if int(t[0]) == state:
+                state_transitions[t[1]].append(t[2])
+
+        # Ajout des informations de l'état dans les données du tableau
+        row = [inout, state]
+        for sym in symbols:
+            row.append(', '.join(state_transitions[sym]) if state_transitions[sym] else '-')
+        data.append(row)
+
+    # Affichage du tableau
+    print(tabulate(data, headers=headers, tablefmt="grid"))
+
+def est_automate_standard(automate):
+    # Vérifier s'il existe plus d'une entrée
+    if len(automate['init_states']) != 1:
+        return False
+
+    # Vérifier si l'unique entrée a des transitions entrantes
+    unique_entree = automate['init_states'][0]
+    for transition in automate['transitions']:
+        if int(transition[2]) == unique_entree:
+            return False
+
+    return True
+
+def afficher_standardisation(automate):
+    if est_automate_standard(automate):
+        print("L'automate est déjà standard.")
+        return
+
+    print("L'automate n'est pas standard.")
+    reponse = input("Voulez-vous le standardiser ? (o/n) : ")
+
+    if reponse.lower() == 'o':
+        automate_standard = standardiser_automate(automate)
+        print("\nAutomate standardisé :")
+        afficher_tableau_automate(automate_standard)
+    else:
+        print("Opération annulée.")
+
+def standardiser_automate(automate):
+    # Création d'un nouvel état initial unique
+    nouvel_etat_initial = automate['num_states']
+    automate['num_states'] += 1
+    ancien_etats_initiaux = automate['init_states']
+
+    # Modification des transitions pour le nouveaux état initial
+    transitions_modifiees = []
+    for etat_initial in ancien_etats_initiaux:
+        for transition in automate['transitions']:
+            if int(transition[0]) == etat_initial:
+                # Nouvelle transition avec le nouvel état initial
+                transitions_modifiees.append(f"{nouvel_etat_initial}{transition[1]}{transition[2]}")
+    # Ajout des nouvelles transitions au début de la liste de transitions existante
+    automate['transitions'] = transitions_modifiees + automate['transitions']
+    automate['init_states'] = [nouvel_etat_initial]
+
+    # Mise à jour du nombre de transitions
+    automate['num_transitions'] += len(transitions_modifiees)
+    print(automate)
+    return automate
+
+
+def est_automate_deterministe(automate):
+    # Vérification du nombre d'entrées
+    if len(automate['init_states']) != 1:
+        return False
+
+    # Vérification des transitions
+    transitions = {}
+    for transition in automate['transitions']:
+        key = (transition[0], transition[1])
+        if key in transitions:
+            return False  # Plus d'une flèche sortant d'un même état pour un même caractère
+        transitions[key] = transition[2]
+
+    return True
+
+
+def est_automate_complet(automate):
+    alphabet = set(chr(ord('a') + i) for i in range(automate['alphabet_size']))
+    for state in range(automate['num_states']):
+        transitions = {chr(ord('a') + i): False for i in range(automate['alphabet_size'])}
+        for transition in automate['transitions']:
+            if int(transition[0]) == state:
+                transitions[transition[1]] = True
+        if False in transitions.values():
+            return False  # Il manque des transitions pour cet état
+    return True
+
+
+def verifier_automate(automate):
+    if est_automate_deterministe(automate):
+        print("L'automate est déterministe.")
+    else:
+        print("L'automate n'est pas déterministe.")
+
+    if est_automate_complet(automate):
+        print("L'automate est complet.")
+    else:
+        print("L'automate n'est pas complet.")
+
+    determiniser = input("Voulez-vous déterminiser l'automate ? (o/n) : ")
+    if determiniser.lower() == 'o':
+        determiniser_automate(automate)
+
+    completer = input("Voulez-vous compléter l'automate ? (o/n) : ")
+    if completer.lower() == 'o':
+        completer_automate(automate)
+
+
+def determiniser_automate(automate):
+    nouveaux_etats = {}  # Dictionnaire pour mapper les nouveaux états aux anciens ensembles d'états
+    nouveaux_transitions = []  # Liste pour stocker les nouvelles transitions
+
+    # Copie des états terminaux de l'automate d'origine
+    etats_terminaux_origine = set(automate['terminal_states'])
+
+    # Fonction pour fusionner les états en un nouvel état
+    def fusionner_etats(etats):
+        etats = list(set(etats))  # Supprimer les doublons
+        etats.sort()  # Trier les états pour garantir un résultat unique
+        etat_fusionne = tuple(etats)
+        if etat_fusionne not in nouveaux_etats:
+            nouveaux_etats[etat_fusionne] = etats
+        return etat_fusionne
+
+    # Fonction pour récupérer les transitions sortant d'un ensemble d'états
+    def transitions_sortantes(ensemble_etats):
+        transitions = {}
+        for transition in automate['transitions']:
+            if int(transition[0]) in ensemble_etats:
+                symbole = transition[1]
+                if symbole in transitions:
+                    transitions[symbole].append(int(transition[2]))
+                else:
+                    transitions[symbole] = [int(transition[2])]
+        return transitions
+
+    # Initialisation de l'ensemble des états à traiter avec l'état initial
+    etats_a_traiter = [automate['init_states']]
+    etats_traites = set()  # Ensemble pour stocker les états déjà traités
+
+    while etats_a_traiter:
+        ensemble_etats = etats_a_traiter.pop(0)
+        if tuple(ensemble_etats) in etats_traites:
+            continue  # Éviter de traiter deux fois le même ensemble d'états
+        etats_traites.add(tuple(ensemble_etats))
+
+        nouvel_etat = fusionner_etats(ensemble_etats)
+        transitions = transitions_sortantes(ensemble_etats)
+        for symbole, etats_suivants in transitions.items():
+            nouvel_etat_suivant = fusionner_etats(etats_suivants)
+            nouveaux_transitions.append((nouvel_etat, symbole, nouvel_etat_suivant))
+            if tuple(etats_suivants) not in etats_traites:
+                etats_a_traiter.append(etats_suivants)
+
+    # Mise à jour des états terminaux dans le nouvel automate
+    automate['terminal_states'] = []
+    for etat, etats in nouveaux_etats.items():
+        for etat_terminal in etats_terminaux_origine:
+            if etat_terminal in etats:
+                automate['terminal_states'].append(etat)
+                break
+
+    # Mise à jour de l'automate avec les nouveaux états et transitions
+    automate['num_states'] = len(nouveaux_etats)
+    automate['init_states'] = [list(nouveaux_etats[tuple(automate['init_states'])])]
+    automate['transitions'] = nouveaux_transitions
+    automate['num_transitions'] = len(nouveaux_transitions)
+
+    print("Automate déterminisé avec succès.")
+
+
+
+
+
+
+
+def completer_automate(automate):
+    alphabet = set(chr(ord('a') + i) for i in range(automate['alphabet_size']))
+    etat_poubelle = automate['num_states']  # État poubelle
+    print(alphabet )
+    print(automate)
+    print(etat_poubelle)
+    nouveaux_transitions = automate['transitions'][:]  # Copie des transitions existantes
+
+    # Ajout des transitions vides pour chaque symbole manquant pour chaque état
+    for state in range(automate['num_states']):
+        transitions = {transition[1] for transition in automate['transitions'] if int(transition[0]) == state}
+        for symbol in alphabet:
+            if symbol not in transitions:
+                nouveaux_transitions.append((state, symbol, etat_poubelle))
+
+    # Ajout de l'état poubelle terminal
+    automate['num_states'] += 1
+    automate['terminal_states'].append(etat_poubelle)
+
+    # Mise à jour de l'automate avec les nouvelles transitions
+    automate['transitions'] = nouveaux_transitions
+    automate['num_transitions'] = len(nouveaux_transitions)
+
+    print("Automate complété avec succès.")
+
+
+# Main
+filename = choisir_fichier_texte()
+print("Vous avez choisi le fichier texte :", filename)
+automate = lire_automate(filename)
+# Afficher le tableau des états de transition
+afficher_tableau_automate(automate)
+# Afficher le graphe de l'automate
+afficher_automate(automate)
+
+#afficher_standardisation(automate)
+#verifier_automate(automate)
+
+# Afficher le graphe de l'automate
+#afficher_automate(automate)
